@@ -16,6 +16,9 @@
  */
 package org.apache.rocketmq.broker.mqtrace;
 
+/**
+ * 消息发送钩子函数，用于发送消息之后和之前执行一定的业务逻辑，记录消息轨迹的最佳扩展点
+ */
 public interface SendMessageHook {
     String hookName();
 

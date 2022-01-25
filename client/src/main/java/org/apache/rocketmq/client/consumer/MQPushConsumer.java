@@ -41,6 +41,10 @@ public interface MQPushConsumer extends MQConsumer {
     @Deprecated
     void registerMessageListener(MessageListener messageListener);
 
+    /**
+     * 注册并发现消息监听器
+     * @param messageListener
+     */
     void registerMessageListener(final MessageListenerConcurrently messageListener);
 
     void registerMessageListener(final MessageListenerOrderly messageListener);
@@ -57,7 +61,7 @@ public interface MQPushConsumer extends MQConsumer {
     /**
      * This method will be removed in the version 5.0.0,because filterServer was removed,and method <code>subscribe(final String topic, final MessageSelector messageSelector)</code>
      * is recommended.
-     *
+     *基于主题订阅消息，过滤方式采用类的方式
      * Subscribe some topic
      *
      * @param fullClassName full class name,must extend org.apache.rocketmq.common.filter. MessageFilter
@@ -72,6 +76,7 @@ public interface MQPushConsumer extends MQConsumer {
      * <p>
      * This interface also has the ability of {@link #subscribe(String, String)},
      * and, support other message selection, such as {@link org.apache.rocketmq.common.filter.ExpressionType#SQL92}.
+     *
      * </p>
      * <p/>
      * <p>
@@ -88,7 +93,7 @@ public interface MQPushConsumer extends MQConsumer {
 
     /**
      * Unsubscribe consumption some topic
-     *
+     *取消订阅
      * @param topic message topic
      */
     void unsubscribe(final String topic);

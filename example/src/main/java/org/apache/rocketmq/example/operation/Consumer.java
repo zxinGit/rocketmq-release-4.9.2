@@ -43,7 +43,7 @@ public class Consumer {
 
             DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(group);
             consumer.setInstanceName(Long.toString(System.currentTimeMillis()));
-
+            consumer.setConsumeMessageBatchMaxSize(1);
             consumer.subscribe(topic, subscription);
 
             consumer.registerMessageListener(new MessageListenerConcurrently() {

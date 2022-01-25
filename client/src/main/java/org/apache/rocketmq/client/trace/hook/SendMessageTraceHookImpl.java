@@ -42,11 +42,11 @@ public class SendMessageTraceHookImpl implements SendMessageHook {
 
     @Override
     public void sendMessageBefore(SendMessageContext context) {
-        //if it is message trace data,then it doesn't recorded
+        //消息轨迹的消息，本身不再做处理
         if (context == null || context.getMessage().getTopic().startsWith(((AsyncTraceDispatcher) localDispatcher).getTraceTopicName())) {
             return;
         }
-        //build the context content of TuxeTraceContext
+        //收集消息的基本信息，并存在调用上下文中
         TraceContext tuxeContext = new TraceContext();
         tuxeContext.setTraceBeans(new ArrayList<TraceBean>(1));
         context.setMqTraceContext(tuxeContext);
@@ -82,6 +82,7 @@ public class SendMessageTraceHookImpl implements SendMessageHook {
 
         TraceContext tuxeContext = (TraceContext) context.getMqTraceContext();
         TraceBean traceBean = tuxeContext.getTraceBeans().get(0);
+        //计算发送消息耗时
         int costTime = (int) ((System.currentTimeMillis() - tuxeContext.getTimeStamp()) / tuxeContext.getTraceBeans().size());
         tuxeContext.setCostTime(costTime);
         if (context.getSendResult().getSendStatus().equals(SendStatus.SEND_OK)) {
@@ -89,10 +90,14 @@ public class SendMessageTraceHookImpl implements SendMessageHook {
         } else {
             tuxeContext.setSuccess(false);
         }
+        //发送到broker所在的分区
         tuxeContext.setRegionId(context.getSendResult().getRegionId());
         traceBean.setMsgId(context.getSendResult().getMsgId());
+        //消息物理偏移量
         traceBean.setOffsetMsgId(context.getSendResult().getOffsetMsgId());
+        //去一个估算值作为消息的存储时间
         traceBean.setStoreTime(tuxeContext.getTimeStamp() + costTime / 2);
+        //异步将消息轨迹信息发送到消息服务器上
         localDispatcher.append(tuxeContext);
     }
 }

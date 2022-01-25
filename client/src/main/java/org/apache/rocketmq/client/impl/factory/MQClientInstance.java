@@ -427,6 +427,10 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 检查消费端client在broker是否正常
+     * @throws MQClientException
+     */
     public void checkClientInBroker() throws MQClientException {
         Iterator<Entry<String, MQConsumerInner>> it = this.consumerTable.entrySet().iterator();
 

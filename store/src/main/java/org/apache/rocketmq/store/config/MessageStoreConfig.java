@@ -79,6 +79,7 @@ public class MessageStoreConfig {
     // When to delete,default is at 4 am
     @ImportantField
     private String deleteWhen = "04";
+    //commitLog文件、consumeQueue文件所在磁盘分区的最大使用量，如果超过该量则表示要立即清楚过期文件
     private int diskMaxUsedSpaceRatio = 75;
     // The number of hours to keep a log file before deleting it (in hours)
     @ImportantField

@@ -20,8 +20,17 @@ import org.apache.rocketmq.common.message.MessageQueue;
 
 public class PullRequest {
     private String consumerGroup;
+    /**
+     * 带拉取消费队列
+     */
     private MessageQueue messageQueue;
+    /**
+     * 消息处理队列，从broker拉取的消息会存在该队列中
+     */
     private ProcessQueue processQueue;
+    /**
+     * 待拉取的messagequeue偏移量
+     */
     private long nextOffset;
     private boolean previouslyLocked = false;
 

@@ -30,21 +30,45 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * mapped file的管理容器
+ */
 public class MappedFileQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
+    /**
+     * 存储目录
+     */
     private final String storePath;
 
+    /**
+     * 单个文件存储的大小
+     */
     protected final int mappedFileSize;
 
+    /**
+     * consumeQueue自己的mappedFile集合，不是commitLog
+     * mappedFile集合
+     * JDK中提供了 CopyOnWriteArrayList 类，相比于在读写锁的思想又更进一步。为了将读取的性能发挥到极致，CopyOnWriteArrayList 读取是完全不用加锁的，并且更厉害的是：写入也不会阻塞读取操作，只有写入和写入之间需要进行同步等待，读操作的性能得到大幅度提升。
+     *
+     */
     protected final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
 
+    /**
+     * mappedFile的服务类
+     */
     private final AllocateMappedFileService allocateMappedFileService;
 
+    /**
+     * 刷盘指针-表示当前指针之前的所有内容均已经完成持久化到磁盘
+     */
     protected long flushedWhere = 0;
+    /**
+     * 当前数据提交指针
+     */
     private long committedWhere = 0;
 
     private volatile long storeTimestamp = 0;
@@ -75,6 +99,11 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     * 根据存储的时间戳查找对应的mappedFile文件
+     * @param timestamp
+     * @return
+     */
     public MappedFile getMappedFileByTime(final long timestamp) {
         Object[] mfs = this.copyMappedFiles(0);
 
@@ -83,11 +112,12 @@ public class MappedFileQueue {
 
         for (int i = 0; i < mfs.length; i++) {
             MappedFile mappedFile = (MappedFile) mfs[i];
+            //最后一次修改的时间  大于timestamp
             if (mappedFile.getLastModifiedTimestamp() >= timestamp) {
                 return mappedFile;
             }
         }
-
+        //若果不存在 则返回最后一个
         return (MappedFile) mfs[mfs.length - 1];
     }
 
@@ -102,17 +132,24 @@ public class MappedFileQueue {
         return mfs;
     }
 
+    /**
+     * 删除offset之后多余的数据
+     * @param offset
+     */
     public void truncateDirtyFiles(long offset) {
         List<MappedFile> willRemoveFiles = new ArrayList<MappedFile>();
 
         for (MappedFile file : this.mappedFiles) {
+            //起始偏移量+mappedFile文件大小
             long fileTailOffset = file.getFileFromOffset() + this.mappedFileSize;
             if (fileTailOffset > offset) {
                 if (offset >= file.getFileFromOffset()) {
+                    //如果offset 大于fileTailOffset 不需要截取，更新mappedFile的内容
                     file.setWrotePosition((int) (offset % this.mappedFileSize));
                     file.setCommittedPosition((int) (offset % this.mappedFileSize));
                     file.setFlushedPosition((int) (offset % this.mappedFileSize));
                 } else {
+                    //否则，删除
                     file.destroy(1000);
                     willRemoveFiles.add(file);
                 }
@@ -122,6 +159,10 @@ public class MappedFileQueue {
         this.deleteExpiredFile(willRemoveFiles);
     }
 
+    /**
+     * 删除过期文件
+     * @param files
+     */
     void deleteExpiredFile(List<MappedFile> files) {
 
         if (!files.isEmpty()) {
@@ -146,6 +187,10 @@ public class MappedFileQueue {
     }
 
 
+    /**
+     * 加载mappedFile文件
+     * @return
+     */
     public boolean load() {
         File dir = new File(this.storePath);
         File[] ls = dir.listFiles();
@@ -305,6 +350,10 @@ public class MappedFileQueue {
         return true;
     }
 
+    /**
+     * 获取最小的 offeset
+     * @return
+     */
     public long getMinOffset() {
 
         if (!this.mappedFiles.isEmpty()) {
@@ -319,6 +368,10 @@ public class MappedFileQueue {
         return -1;
     }
 
+    /**
+     * 通过最后一个文件的起始偏移量+读指针==>说明
+     * @return
+     */
     public long getMaxOffset() {
         MappedFile mappedFile = getLastMappedFile();
         if (mappedFile != null) {
@@ -368,6 +421,7 @@ public class MappedFileQueue {
         if (null != mfs) {
             for (int i = 0; i < mfsLength; i++) {
                 MappedFile mappedFile = (MappedFile) mfs[i];
+                //计算文件最大的存活时间
                 long liveMaxTimestamp = mappedFile.getLastModifiedTimestamp() + expiredTime;
                 if (System.currentTimeMillis() >= liveMaxTimestamp || cleanImmediately) {
                     if (mappedFile.destroy(intervalForcibly)) {
@@ -380,6 +434,7 @@ public class MappedFileQueue {
 
                         if (deleteFilesInterval > 0 && (i + 1) < mfsLength) {
                             try {
+                                //删除时间间隔
                                 Thread.sleep(deleteFilesInterval);
                             } catch (InterruptedException e) {
                             }
@@ -492,18 +547,19 @@ public class MappedFileQueue {
                         this.mappedFileSize,
                         this.mappedFiles.size());
                 } else {
+                    //由于第一个文件不一定是000000000000000000孤儿需要减去(firstMappedFile.getFileFromOffset() / this.mappedFileSize)) 才得到第几个mappedfile
                     int index = (int) ((offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize));
                     MappedFile targetFile = null;
                     try {
                         targetFile = this.mappedFiles.get(index);
                     } catch (Exception ignored) {
                     }
-
+                    //类似校验 offset 是否符合查找到的targetFile
                     if (targetFile != null && offset >= targetFile.getFileFromOffset()
                         && offset < targetFile.getFileFromOffset() + this.mappedFileSize) {
                         return targetFile;
                     }
-
+                    //上一步是直接get(i) 获得，这一步骤是通过遍历查询
                     for (MappedFile tmpMappedFile : this.mappedFiles) {
                         if (offset >= tmpMappedFile.getFileFromOffset()
                             && offset < tmpMappedFile.getFileFromOffset() + this.mappedFileSize) {
@@ -511,7 +567,7 @@ public class MappedFileQueue {
                         }
                     }
                 }
-
+                // 未找到返回第一个
                 if (returnFirstOnNotFound) {
                     return firstMappedFile;
                 }
@@ -523,6 +579,10 @@ public class MappedFileQueue {
         return null;
     }
 
+    /**
+     * 获取第一个mappedFile 直接get(0)
+     * @return
+     */
     public MappedFile getFirstMappedFile() {
         MappedFile mappedFileFirst = null;
 
